@@ -132,7 +132,7 @@ def main():
         send_alert("🚨 <b>FIFA LMS Drop — Dallas</b>", group_by_match(new_drops))
 
     save_state(seen)
-    print(f"Done. {len(new_drops)} new, {len(redrops)} re-drop(s).")
+    print(f"Done. {len(new_drops)} new drop(s).")
 
 
 if __name__ == "__main__":
