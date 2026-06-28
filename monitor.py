@@ -2,12 +2,13 @@ import requests
 import json
 import os
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 STATE_FILE = "lms_state.json"
 DATA_URL = "https://fifaticketscout.com/data/lms_drops.json"
-CUTOFF = datetime(2026, 6, 28, tzinfo=timezone.utc)
+CT = ZoneInfo("America/Chicago")
 
 
 def fetch_data():
@@ -42,11 +43,12 @@ def main():
     data = fetch_data()
     seen = load_state()
 
+    now = datetime.now(timezone.utc)
     dallas_idxs = {
         i
         for i, m in enumerate(data["matches"])
         if m.get("city") == "Dallas"
-        and datetime.fromisoformat(m["ko"]) >= CUTOFF
+        and datetime.fromisoformat(m["ko"]) > now
     }
 
     new_drops = []
@@ -84,10 +86,10 @@ def main():
 
         lines = ["🚨 <b>FIFA LMS Drop — Dallas</b>"]
         for match_name, info in by_match.items():
-            ko = datetime.fromisoformat(info["kickoff"]).strftime("%-m/%-d %-I:%M%p UTC")
+            ko = datetime.fromisoformat(info["kickoff"]).astimezone(CT).strftime("%-m/%-d %-I:%M%p CT")
             lines.append(f'\n<b>{match_name}</b> ({info["stage"]}) | KO: {ko}')
             for d in sorted(info["drops"], key=lambda x: x["drop_time"], reverse=True):
-                dt = d["drop_time"].strftime("%-m/%-d %-I:%M%p UTC")
+                dt = d["drop_time"].astimezone(CT).strftime("%-m/%-d %-I:%M%p CT")
                 lines.append(f'  • {d["category"]}: {d["count"]} seats (first seen {dt})')
 
         send_telegram("\n".join(lines))
