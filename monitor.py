@@ -101,7 +101,6 @@ def main():
     }
 
     new_drops = []
-    redrops = []
 
     for entry in data["recent"]:
         match_idx, slot_idx, cat_idx, count = entry
@@ -110,12 +109,15 @@ def main():
         if count < MIN_SEATS:
             continue
         key = (match_idx, slot_idx, cat_idx)
+        if key in seen:
+            seen[key] = count
+            continue
         match = data["matches"][match_idx]
         cat = data["categories"][cat_idx] if cat_idx < len(data["categories"]) else "Unknown"
         drop_time = datetime.fromisoformat(data["recent_start"]) + timedelta(
             minutes=slot_idx * data["recent_slot_min"]
         )
-        base = {
+        new_drops.append({
             "match": match["m"],
             "stage": match["stage"],
             "kickoff": match["ko"],
@@ -123,20 +125,11 @@ def main():
             "count": count,
             "drop_time": drop_time,
             "key": key,
-        }
-
-        if key not in seen:
-            new_drops.append(base)
-            seen[key] = count
-        elif count > seen[key]:
-            redrops.append({**base, "added": count - seen[key]})
-            seen[key] = count
+        })
+        seen[key] = count
 
     if new_drops:
         send_alert("🚨 <b>FIFA LMS Drop — Dallas</b>", group_by_match(new_drops))
-
-    if redrops:
-        send_alert("🔁 <b>FIFA LMS Re-drop — Dallas</b>", group_by_match(redrops))
 
     save_state(seen)
     print(f"Done. {len(new_drops)} new, {len(redrops)} re-drop(s).")
