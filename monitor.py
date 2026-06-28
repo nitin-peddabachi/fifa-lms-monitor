@@ -83,14 +83,19 @@ def main():
             if k not in by_match:
                 by_match[k] = {"stage": drop["stage"], "kickoff": drop["kickoff"], "cats": {}}
             cats = by_match[k]["cats"]
-            cats[drop["category"]] = cats.get(drop["category"], 0) + drop["count"]
+            if drop["category"] not in cats:
+                cats[drop["category"]] = {"count": 0, "first_seen": drop["drop_time"]}
+            cats[drop["category"]]["count"] += drop["count"]
+            if drop["drop_time"] < cats[drop["category"]]["first_seen"]:
+                cats[drop["category"]]["first_seen"] = drop["drop_time"]
 
         lines = ["🚨 <b>FIFA LMS Drop — Dallas</b>"]
         for match_name, info in by_match.items():
             ko = datetime.fromisoformat(info["kickoff"]).astimezone(CT).strftime("%-m/%-d %-I:%M%p CT")
             lines.append(f'\n<b>{match_name}</b> ({info["stage"]}) | KO: {ko}')
-            for cat, total in sorted(info["cats"].items()):
-                lines.append(f'  • {cat}: {total} seats')
+            for cat, data in sorted(info["cats"].items()):
+                first = data["first_seen"].astimezone(CT).strftime("%-m/%-d %-I:%M%p CT")
+                lines.append(f'  • {cat}: {data["count"]} seats (first seen {first})')
 
         send_telegram("\n".join(lines))
         for drop in new_drops:
