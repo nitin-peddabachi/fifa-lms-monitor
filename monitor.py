@@ -117,6 +117,9 @@ def main():
         drop_time = datetime.fromisoformat(data["recent_start"]) + timedelta(
             minutes=slot_idx * data["recent_slot_min"]
         )
+        if drop_time < now - timedelta(minutes=30):
+            seen[key] = count
+            continue
         new_drops.append({
             "match": match["m"],
             "stage": match["stage"],
