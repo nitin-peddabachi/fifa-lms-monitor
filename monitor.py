@@ -103,10 +103,10 @@ def main():
     new_drops = []
 
     for entry in data["recent"]:
-        match_idx, slot_idx, cat_idx, count = entry
+        match_idx, slot_idx, cat_idx, count = entry[:4]
         if match_idx not in dallas_idxs:
             continue
-        if count < MIN_SEATS:
+        if count <= MIN_SEATS:
             continue
         key = (match_idx, slot_idx, cat_idx)
         if key in seen:
