@@ -1,4 +1,4 @@
-name: FIFA LMS Monitor — Dallas
+name: FIFA LMS Monitor
 
 on:
   workflow_dispatch:

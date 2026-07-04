@@ -11,7 +11,7 @@ STATE_FILE = "lms_state.json"
 DATA_URL = "https://fifaticketscout.com/data/lms_drops.json"
 BOOKING_URL = "https://www.fifa.com/fifaplus/en/tournaments/mens/worldcup/canadamexicousa2026/tickets"
 CT = ZoneInfo("America/Chicago")
-MIN_SEATS = 5
+MIN_SEATS = 50  # only alert on drops with more than this many seats (anti-spam)
 
 
 def fetch_data():
@@ -21,8 +21,9 @@ def fetch_data():
 
 
 def load_state():
+    """Returns (seen, existed). existed=False means first run -> baseline only."""
     if not os.path.exists(STATE_FILE):
-        return {}
+        return {}, False
     with open(STATE_FILE) as f:
         raw = json.load(f)["seen"]
     result = {}
@@ -31,7 +32,7 @@ def load_state():
             result[tuple(item)] = 0
         else:
             result[tuple(item[:3])] = item[3]
-    return result
+    return result, True
 
 
 def save_state(seen):
@@ -52,7 +53,7 @@ def send_alert(header, by_match):
     lines = [header]
     for match_name, info in by_match.items():
         ko = datetime.fromisoformat(info["kickoff"]).astimezone(CT).strftime("%-m/%-d %-I:%M%p CT")
-        lines.append(f'\n<b>{match_name}</b> ({info["stage"]}) | KO: {ko}')
+        lines.append(f'\n<b>{match_name}</b> — {info["city"]} ({info["stage"]}) | KO: {ko}')
         for cat, d in sorted(info["cats"].items()):
             first = d["first_seen"].astimezone(CT).strftime("%-m/%-d %-I:%M%p CT")
             seat_info = f'{d["count"]} seats'
@@ -71,7 +72,7 @@ def group_by_match(drops):
     for drop in drops:
         k = drop["match"]
         if k not in by_match:
-            by_match[k] = {"stage": drop["stage"], "kickoff": drop["kickoff"], "cats": {}}
+            by_match[k] = {"city": drop["city"], "stage": drop["stage"], "kickoff": drop["kickoff"], "cats": {}}
         cats = by_match[k]["cats"]
         if drop["category"] not in cats:
             cats[drop["category"]] = {"count": 0, "first_seen": drop["drop_time"]}
@@ -90,21 +91,22 @@ def main():
         send_telegram(f"⚠️ <b>FIFA LMS Monitor — error fetching data</b>\n{e}")
         sys.exit(1)
 
-    seen = load_state()
+    seen, state_existed = load_state()
+    first_run = not state_existed
 
     now = datetime.now(timezone.utc)
-    dallas_idxs = {
+    # All upcoming matches (any city). Past matches can't have relevant drops.
+    upcoming_idxs = {
         i
         for i, m in enumerate(data["matches"])
-        if m.get("city") == "Dallas"
-        and datetime.fromisoformat(m["ko"]) > now
+        if datetime.fromisoformat(m["ko"]) > now
     }
 
     new_drops = []
 
     for entry in data["recent"]:
         match_idx, slot_idx, cat_idx, count = entry[:4]
-        if match_idx not in dallas_idxs:
+        if match_idx not in upcoming_idxs:
             continue
         if count <= MIN_SEATS:
             continue
@@ -112,16 +114,19 @@ def main():
         if key in seen:
             seen[key] = count
             continue
+        # First run: baseline everything currently in the feed without alerting,
+        # so a cold start doesn't blast the whole ~14-day backlog.
+        if first_run:
+            seen[key] = count
+            continue
         match = data["matches"][match_idx]
         cat = data["categories"][cat_idx] if cat_idx < len(data["categories"]) else "Unknown"
         drop_time = datetime.fromisoformat(data["recent_start"]) + timedelta(
             minutes=slot_idx * data["recent_slot_min"]
         )
-        if drop_time < now - timedelta(minutes=30):
-            seen[key] = count
-            continue
         new_drops.append({
             "match": match["m"],
+            "city": match.get("city", "?"),
             "stage": match["stage"],
             "kickoff": match["ko"],
             "category": cat,
@@ -132,7 +137,7 @@ def main():
         seen[key] = count
 
     if new_drops:
-        send_alert("🚨 <b>FIFA LMS Drop — Dallas</b>", group_by_match(new_drops))
+        send_alert("🚨 <b>FIFA LMS Drop</b>", group_by_match(new_drops))
 
     save_state(seen)
     print(f"Done. {len(new_drops)} new drop(s).")
