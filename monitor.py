@@ -109,6 +109,8 @@ def main():
     }
 
     new_drops = []
+    recent_start = datetime.fromisoformat(data["recent_start"])
+    slot_min = data["recent_slot_min"]
 
     for entry in data["recent"]:
         match_idx, slot_idx, cat_idx, count = entry[:4]
@@ -116,7 +118,14 @@ def main():
             continue
         if count <= MIN_SEATS:
             continue
-        key = (match_idx, slot_idx, cat_idx)
+        match = data["matches"][match_idx]
+        cat = data["categories"][cat_idx] if cat_idx < len(data["categories"]) else "Unknown"
+        drop_time = recent_start + timedelta(minutes=slot_idx * slot_min)
+        # Key by STABLE identifiers: match number (n), absolute drop time (epoch),
+        # and category name. The feed's recent_start rolls forward, so slot_idx and
+        # match_idx are NOT stable across snapshots — keying on them re-alerts the
+        # same drop every time the window shifts. Absolute time is invariant.
+        key = (match["n"], int(drop_time.timestamp()), cat)
         if key in seen:
             seen[key] = count
             continue
@@ -125,11 +134,6 @@ def main():
         if first_run:
             seen[key] = count
             continue
-        match = data["matches"][match_idx]
-        cat = data["categories"][cat_idx] if cat_idx < len(data["categories"]) else "Unknown"
-        drop_time = datetime.fromisoformat(data["recent_start"]) + timedelta(
-            minutes=slot_idx * data["recent_slot_min"]
-        )
         new_drops.append({
             "match": match["m"],
             "city": match.get("city", "?"),
