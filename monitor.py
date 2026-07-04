@@ -12,6 +12,7 @@ DATA_URL = "https://fifaticketscout.com/data/lms_drops.json"
 BOOKING_URL = "https://www.fifa.com/fifaplus/en/tournaments/mens/worldcup/canadamexicousa2026/tickets"
 CT = ZoneInfo("America/Chicago")
 MIN_SEATS = 50  # only alert on drops with more than this many seats (anti-spam)
+HOME_CITY = "Dallas"  # highlighted + sorted to top of each alert
 
 
 def fetch_data():
@@ -51,9 +52,14 @@ def send_telegram(text, reply_markup=None):
 
 def send_alert(header, by_match):
     lines = [header]
-    for match_name, info in by_match.items():
+    # Show HOME_CITY matches first so they don't get lost in a long message.
+    items = sorted(by_match.items(), key=lambda kv: kv[1]["city"] != HOME_CITY)
+    for match_name, info in items:
         ko = datetime.fromisoformat(info["kickoff"]).astimezone(CT).strftime("%-m/%-d %-I:%M%p CT")
-        lines.append(f'\n<b>{match_name}</b> — {info["city"]} ({info["stage"]}) | KO: {ko}')
+        if info["city"] == HOME_CITY:
+            lines.append(f'\n🔴🔴 <b>{match_name} — {info["city"].upper()}</b> 🔴🔴 ({info["stage"]}) | KO: {ko}')
+        else:
+            lines.append(f'\n<b>{match_name}</b> — {info["city"]} ({info["stage"]}) | KO: {ko}')
         for cat, d in sorted(info["cats"].items()):
             first = d["first_seen"].astimezone(CT).strftime("%-m/%-d %-I:%M%p CT")
             seat_info = f'{d["count"]} seats'
