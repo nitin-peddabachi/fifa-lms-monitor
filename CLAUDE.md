@@ -1,15 +1,23 @@
-# FIFA LMS Monitor — Dallas
+# FIFA LMS Monitor
 
-Monitors the FIFA "Last Minute Sales" ticket feed for Dallas matches and sends
-Telegram alerts when new seat drops appear.
+Monitors the FIFA "Last Minute Sales" ticket feed for **all upcoming matches** and
+sends Telegram alerts when new seat drops appear.
 
 ## How it works
 
-- `monitor.py` fetches `https://fifaticketscout.com/data/lms_drops.json`, filters
-  for upcoming **Dallas** matches, and alerts on **new** drops with **more than 5
-  seats** (`count > MIN_SEATS`, `MIN_SEATS = 5`).
-- State is persisted in `lms_state.json`, committed back to `main` by the workflow
-  (`Save state` step) so drops already alerted aren't re-sent.
+- `monitor.py` fetches `https://fifaticketscout.com/data/lms_drops.json`, considers
+  every **upcoming** match (any city; past matches are skipped), and alerts on **new**
+  drops with **more than 50 seats** (`count > MIN_SEATS`, `MIN_SEATS = 50` — raised
+  from 5 to avoid spamming the group now that all matches are watched).
+- **Only new drops going forward alert.** State is persisted in `lms_state.json`,
+  committed back to `main` by the workflow (`Save state` step). A drop only fires once.
+- **Anti-spam design:** (1) on first run / empty state the whole current feed is
+  baselined silently (no cold-start storm); (2) all new drops within a single run are
+  grouped into one message, so at most one Telegram message per ~5-min run.
+- There is intentionally **no time-based freshness filter**. An earlier 30-minute
+  `drop_time` filter silently swallowed real drops the feed published late/backfilled
+  (e.g. a 4.6k POR v ESP release was missed). "Already handled" is tracked purely via
+  `lms_state.json`, not the clock. Do not re-add a drop_time cutoff.
 - Alerts go to Telegram; secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set
   as GitHub Actions repo secrets.
 - `.github/workflows/lms-monitor.yml` runs `monitor.py` and notifies Telegram on
