@@ -38,6 +38,18 @@ arrays; only the first four fields are used:
 `[match_idx, slot_idx, cat_idx, count, ...]`. The code unpacks `entry[:4]` so extra
 trailing fields the feed adds don't break parsing.
 
+**`recent_start` rolls forward (critical).** The feed's `recent` window is anchored
+to a *moving* `recent_start`, and `slot_idx` is relative to it — so the SAME real
+drop gets a different `slot_idx` after the window rolls (observed: `recent_start`
+jumped 05:00→18:00, POR v ESP slot 1336→1284, same 03:00 UTC drop). `match_idx` is
+likewise just an array position. **Never key dedup state on `slot_idx` or
+`match_idx`** — doing so re-alerts every past drop each time the window shifts.
+State is keyed on stable values instead: `(match["n"], int(drop_time.timestamp()),
+category_name)`, where `drop_time = recent_start + slot_idx*slot_min` is an absolute
+UTC time invariant to the anchor. If you change the keying scheme, re-baseline
+`lms_state.json` (delete it and let a first run reseed) or the format change will
+storm.
+
 ## Testing locally
 
 Run against the live feed with network sends stubbed so no real Telegram message fires
